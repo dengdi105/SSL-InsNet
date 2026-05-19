@@ -5,13 +5,12 @@ import torch.nn.functional as F
 class ConfidenceGatedIntegration(nn.Module):
     """
     Confidence-gated Feature Integration (CFI) Module 
-    Strictly formulated based on Equations (8) to (13) of the manuscript.
     """
     def __init__(self, d_model=320, dropout=0.1):
         super().__init__()
         self.d_model = d_model
 
-        # Multi-layer transition for computing trust weight (Equations 10 & 11)
+        # Multi-layer transition for computing trust weight
         # Input dimension is 4 * d_model because of: [v_L (2 * d_model) ++ v_R (2 * d_model)]
         self.W_g1 = nn.Linear(4 * d_model, d_model)
         self.W_g2 = nn.Linear(d_model, 1) # Outputs a scalar score g_conf
