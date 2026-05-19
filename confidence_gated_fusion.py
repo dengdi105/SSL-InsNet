@@ -15,7 +15,7 @@ class ConfidenceGatedIntegration(nn.Module):
         self.W_g1 = nn.Linear(4 * d_model, d_model)
         self.W_g2 = nn.Linear(d_model, 1) # Outputs a scalar score g_conf
 
-        # Stabilization projection layer (Equation 13)
+        # Stabilization projection layer
         self.W_f = nn.Linear(d_model, d_model)
         self.layer_norm = nn.LayerNorm(d_model)
         self.dropout = nn.Dropout(dropout)
@@ -31,12 +31,12 @@ class ConfidenceGatedIntegration(nn.Module):
         # Formulate/ensure tensors are in the standard feature shape [B, d_model] for token-level fusion
         # If inputs come as 4D spatial feature maps from backbones, condense them via pooling:
         if X_local.dim() == 4:
-            # Equation (8): v_L = AvgPool(X_local) ++ MaxPool(X_local)
+            # v_L = AvgPool(X_local) ++ MaxPool(X_local)
             v_L_avg = X_local.mean(dim=(2, 3))
             v_L_max = X_local.amax(dim=(2, 3))
             v_L = torch.cat([v_L_avg, v_L_max], dim=-1) # [B, 2 * d_model]
             
-            # Equation (9): v_R = AvgPool(X_regional) ++ MaxPool(X_regional)
+            # v_R = AvgPool(X_regional) ++ MaxPool(X_regional)
             v_R_avg = X_regional.mean(dim=(2, 3))
             v_R_max = X_regional.amax(dim=(2, 3))
             v_R = torch.cat([v_R_avg, v_R_max], dim=-1) # [B, 2 * d_model]
@@ -60,19 +60,19 @@ class ConfidenceGatedIntegration(nn.Module):
         # Concatenate descriptors to resolve conflicts: [v_L ++ v_R] -> Shape: [B, 4 * d_model]
         v_concat = torch.cat([v_L, v_R], dim=-1)
         
-        # Equation (10): S_cfi = ReLU(W_g1([v_L ++ v_R]) + b_g1) -> Shape: [B, d_model]
+        # S_cfi = ReLU(W_g1([v_L ++ v_R]) + b_g1) -> Shape: [B, d_model]
         S_cfi = F.relu(self.W_g1(v_concat))
         
-        # Equation (11): g_conf = Sigmoid(W_g2(S_cfi) + b_g2) -> Shape: [B, 1] (Scalar score per sample)
+        # g_conf = Sigmoid(W_g2(S_cfi) + b_g2) -> Shape: [B, 1] (Scalar score per sample)
         g_conf = torch.sigmoid(self.W_g2(S_cfi))
 
         # ----------------------------------------------------
         # 2. Adaptive Feature Fusion
         # ----------------------------------------------------
-        # Equation (12): Z_f = g_conf * X_local + (1 - g_conf) * X_regional -> Shape: [B, d_model]
+        # Z_f = g_conf * X_local + (1 - g_conf) * X_regional -> Shape: [B, d_model]
         Z_f = g_conf * X_local_base + (1.0 - g_conf) * X_regional_base
 
-        # Equation (13): z_i = LayerNorm( sigma( W_f * Z_f + b_f ) ) -> Shape: [B, d_model]
+        # z_i = LayerNorm( sigma( W_f * Z_f + b_f ) ) -> Shape: [B, d_model]
         # Using ELU/GELU as the non-linear activation σ according to framework standards
         Z_projected = F.elu(self.W_f(Z_f))
         Z_projected = self.dropout(Z_projected)
