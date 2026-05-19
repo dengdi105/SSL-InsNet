@@ -1,5 +1,5 @@
-# TTT-InsNet
-a novel time-distributed dual-transformer algorithm for large-scale insertions detection in long-read
+# SSL-InsNet
+a Sequence Structured Labeling Framework for Large-Scale Genomic Insertion Detection Leveraging Time-Distributed Dual Transformer
 
 # Installation
 
