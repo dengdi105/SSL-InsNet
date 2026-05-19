@@ -193,15 +193,3 @@ class SpatialTransformer(nn.Module):
         
         return x
 
-if __name__ == "__main__":
-    # Local integrity flow trace checking
-    # Simulating a downsampled spatial map context (e.g., Height=25, Width=5) matching Backbone targets
-    H, W = 25, 5
-    tokens_count = H * W
-    sample_batch = torch.randn([4, tokens_count, 64]) 
-    
-    s_trans = SpatialTransformer(input_dim=64, embed_dim=128, num_heads=8, window_size=(5, 1), sr_ratio=5, output_dim=320)
-    output_features = s_trans(sample_batch, (H, W))
-    
-    print("S-Trans Core Engine processing validated successfully.")
-    print("Target spatial tensor configuration size:", output_features.shape)  # Should verify [4, 320]
