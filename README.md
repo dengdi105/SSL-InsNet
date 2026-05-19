@@ -1,37 +1,38 @@
-# SSL-InsNet: a Sequence Structured Labeling Framework for Large-Scale Genomic Insertion Detection Leveraging Time-Distributed Dual Transformer
+# SSL-InsNet
+a Sequence Structured Labeling Framework for Large-Scale Genomic Insertion Detection Leveraging Time-Distributed Dual Transformer
 
 <img width="1119" height="421" alt="SSL-InsNet Architecture" src="https://raw.githubusercontent.com/dengdi105/SSL-InsNet/main/imgs/main_plot_new.png" />
 
 <div align="center">
   
-**Overall architecture of SSL-InsNet with time-distributed dual transformer and dynamic gated-sparse attention.**
+**Overall workflow and network architecture of SSL-InsNet for large-scale genomic insertion variant calling.**
 
 </div>
 
 # 📖 Overview
 
-**SSL-InsNet** (Sequence Structured Labeling Framework) is a novel deep learning framework for large-scale genomic insertion variant detection in third-generation sequencing data. The framework integrates semantic nucleotide features and syntactic alignment signatures via a dual-stream time-distributed architecture, significantly enhancing insertion calling precision while maintaining high computational scaling performance.
+**SSL-InsNet** is a novel sequence structured labeling framework engineered for large-scale genomic insertion detection in third-generation long-read sequencing data. The framework reformulates insertion calling as a structured tagging task, integrating a Multi-level Spatial Perception (MSP) module and a Time-distributed Transformer (T-Trans) within a dual-transformer architecture. By incorporating an advanced confidence-gated fusion layer, the network effectively suppresses alignment artifacts to deliver highly precise, chromosome-wide structural variant profiles.
 
 # ✨ Key Features
 
-🔀 Dual-Modal Sequence Labeling: Simultaneously encodes nucleotide sequence identities (semantics) and structural alignment metrics (syntactics)
+⏳ **Sequence Structured Labeling**: Reformulates large-scale genomic insertion detection into an optimized sequence structured tagging task across continuous long-read tracks.
 
-⏳ Time-Distributed Contextualization: Processes chromosome-scale features in optimized sub-temporal windows to drastically reduce memory overhead
+🧬 **Multi-level Spatial Perception (MSP)**: Integrates a **Spatial Transformer (S-Trans)** with deep convolutions via a hierarchical attention mechanism to simultaneously resolve micro-scale breakpoint motifs and regional genomic contexts.
 
-🛡️ Dynamic Gated-Sparse Attention (DGSA): Cross-modal attention fusion for robust signal filtering and background noise suppression
+🤝 **Confidence-gated Feature Integration (CFI)**: Implements an elite adaptive **Feature Fusion** module that leverages learnable descriptors to fuse heterogeneous spatial features, effectively suppressing sequencer background noise and alignment artifacts.
 
-🚀 Native Multi-GPU Acceleration: Highly optimized data parallel processing for fast chromosome-wide execution
+⏳ **Time-distributed Transformer (T-Trans)**: Tracks macro-scale long-distance sequence dependencies along the temporal axis across consecutive segments, ensuring global structural consistency for ultra-long variants under standard GPU footprints.
 
-📊 Standardized VCF Exporter: Automatically generates production-ready VCF v4.2 callsets with comprehensive read-support annotations
+🛡️ **Neighborhood-Weighted Focal Loss (NWFL)**: Utilizes a custom structural optimization loss function to supervise continuous position tags and drastically refine boundary alignment precision.
 
 # 🚀 Quick Start
 
 ## Prerequisites
 
-- Python 3.9+
-- CUDA 12.4+ (for GPU acceleration)
-- 11+ GB VRAM recommended for inference
-- 16+ GB RAM
+- Python 3.9.1
+- CUDA 12.4+
+- PyTorch 2.5
+- 11+ GB VRAM recommended
 
 ## Installation
 
@@ -39,8 +40,8 @@
 conda create -n ssl_insnet python=3.9.1 -y
 conda activate ssl_insnet
 
-### Install core deep learning dependencies
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+### Install core dependencies
+pip install torch==2.5.0 torchvision==0.20.0 --index-url https://download.pytorch.org/whl/cu124
 pip install pandas==2.2.3 numpy==1.26.4
 
 ### Install specialized bioinformatics packages
@@ -48,83 +49,60 @@ pip install pysam==0.23.0
 
 ## Essential Bioinformatics Dependencies
 
-| Package | Purpose |
-|---------|---------|
-| ![pysam](https://img.shields.io/badge/pysam-0.23.0-14a2b8?logo=python&logoColor=white) | BAM/CRAM file streaming and header parsing |
-| ![pandas](https://img.shields.io/badge/pandas-2.2.3-14a2b8?logo=pandas&logoColor=white) | Feature tracking and matrix metadata handling |
-| ![numpy](https://img.shields.io/badge/numpy-1.26.4-14a2b8?logo=numpy&logoColor=white) | Vectorized array serialization and processing |
+| Package | Purpose | Official Repository |
+|---------|---------|---------------------|
+| ![pysam](https://img.shields.io/badge/pysam-0.23.0-14a2b8?logo=python&logoColor=white) | BAM/CRAM file processing and header extraction | [GitHub](https://github.com/pysam-developers/pysam) |
+| ![pandas](https://img.shields.io/badge/pandas-2.2.3-14a2b8?logo=pandas&logoColor=white) | Window feature metrics management | [GitHub](https://github.com/pandas-dev/pandas) |
+| ![numpy](https://img.shields.io/badge/numpy-1.26.4-14a2b8?logo=numpy&logoColor=white) | Vectorized genomic array serialization | [GitHub](https://github.com/numpy/numpy) |
 
-# 📁 Data Preparation & Calling Pipeline
+# 📁 Workflow Pipeline
 
 ## 1. Produce Data for Call SV (`generate_feature`)
 
-Extract alignment signatures and raw genomic tracks into chunked feature matrices (`.npy`) across targeted genomic spans.
+Extract alignment signatures and base matrices into continuous serialized chunks across target chromosomes.
+```
+python  SSL_InsNet.py generate_feature bam_file output_path contigs_list(default:[](all chromosomes)) max_worker vcf_file
+```
+bam_file: the path of the alignment file about the reference and the long read set;
 
-python SSL_InsNet.py generate_feature
+output_path: a folder which is used to store generated features data;
 
---bam_file /path/to/your/HG002_PB_5x_RG_HP10XtrioRTG.bam
+contigs_list: the list of contig to preform detection. (default: [], all contig are used);
 
---output_path ./features_dir
+max_worker: the number of threads to use;
 
---contigs_list [12,13]
-
---max_worker 5
-
---vcf_file /path/to/your/HG002_SVs_Tier1_v0.6.vcf.gz
-
-Notes: Pass empty list [] to contigs_list to automatically use all chromosomes.
-
+vcf_file: the gold standard file for standard data.
+```
+eg: python  SSL_InsNet.py generate_feature ./HG002_PB_5x_RG_HP10XtrioRTG.bam ./features_dir [12,13] 5 ./HG002_SVs_Tier1_v0.6.vcf.gz
+```
 
 ## 2. Call Insertion (`call_insertion`)
 
-Stream the generated sequence window blocks through the Time-Distributed network to perform candidate merging and final insertion calling.
+Stream window blocks through the Time-Distributed network to run sequence decoding and merge insertion candidates.
+```
+python  SSL_InsNet.py call_insertion gpu_name save_length timesteps ins_predict_weight data_path bam_file out_vcf_file contigs support
+```
 
-python SSL_InsNet.py call_insertion
+gpu_name: num of the GPU to use (e.g., '0' or '1,2');
 
---gpu_name '0,1'
+save_length: the feature file spans across nucleotide base sequence lengths;
 
---save_length 10000000
+timesteps: time step of time-distributed network;
 
---timesteps 100
+ins_predict_weight: path of insert predict weight file (.pth);
 
---ins_predict_weight ./weights/SSL_InsNet_best.pth
+data_path: a folder for storing evaluation feature files;
 
---data_path ./features_dir
+bam_file: path of the alignment file about the reference and the long read set;
 
---bam_file /path/to/your/HG002_PB_10x_RG_HP10XtrioRTG.bam
+out_vcf_file: the path of output vcf file;
 
---out_vcf_file ./calls/output_variants.vcf
+contigs: the list of contig to preform detection. (default: [], all contig are used);
 
---contigs [12,13,14,15,16,17,18,19,20,21,22]
-
---support 5
-
-
-## Key Executive Parameters:
-
-| Parameter  | Description                        | Default               |
-|------------|------------------------------------|-----------------------|
-| `--gpu_name` | GPU device indices (e.g., '0' or '0,1') | '0'                   |
-| `--save_length` | Basepair sequence length spanned per chunk | 10000000             |
-| `--timesteps` | Time step dimension for the recurrent layer | 100                   |
-| `--support` | Minimum read support to retain an insertion | 5                     |
-
-# 🏗️ Architecture Overview
-
-<img width="70%" alt="DGSA Module" src="https://raw.githubusercontent.com/dengdi105/SSL-InsNet/main/imgs/DGSA_new2.png" />
-
-Input:
-├── Semantic Stream (BASES) → Feature Expansion → Time-Distributed Backbone
-└── Syntactic Stream (CIGAR) → Structural Mapping → Time-Distributed Backbone
-
-Core Module:
-└── Dynamic Gated-Sparse Attention (DGSA)
-├── Cross-Modal Dual Attention Fusion
-├── Confidence-Gated Residual Recalibration
-└── Sparse Context Selection
-
-Output: Standard Insertion Variant Calling (VCF v4.2)
-
+support: min support reads.
+```
+eg: python SSL_InsNet.py call_insertion '1,2' 10000000 100 ./ins_predict_weight.pth ./features_dir /home/laicx/00.dataset/HG002_PB_10x_RG_HP10XtrioRTG.bam ./out_vcf_file.vcf [12,13] 5
+```
 
 # 📊 Tested Data
 
